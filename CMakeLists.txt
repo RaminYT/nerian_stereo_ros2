@@ -45,8 +45,6 @@ endif()
 
 include_directories(
     ${CMAKE_CURRENT_LIST_DIR}/include
-    ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer
-    ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/nvcom/helpers
     ${OpenCV_INCLUDE_DIRS}
 )
 
@@ -54,7 +52,7 @@ include_directories(
 ## libvisiontransfer ##
 #######################
 
-set(BUILD_VT 0)
+set(BUILD_VT 1)
 
 if(BUILD_VT)
     # Find lib vision transfer
@@ -87,23 +85,30 @@ if(BUILD_VT)
     # Build sources at runtime
     add_custom_target(nerian_stereo_visiontransfer_stub ALL
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software-${VT_VERSION}-src.tar.xz
-        COMMAND ${CMAKE_COMMAND} . -DCMAKE_CXX_FLAGS=${VT_CXX_FLAGS} -DDISABLE_NATIVE=1 -DDISABLE_PCL=1 -DDISABLE_OPENCV=1
+        COMMAND ${CMAKE_COMMAND} . -DCMAKE_CXX_FLAGS=${VT_CXX_FLAGS} -DDISABLE_NATIVE=1 -DDISABLE_PCL=1 -DDISABLE_OPENCV=1 -DDISABLE_PYTHON=1
         COMMAND make
-        COMMAND cp lib/libvisiontransfer.so ${CATKIN_DEVEL_PREFIX}/lib/
+        #COMMAND cp lib/libvisiontransfer.so ${CMAKE_CURRENT_BINARY_DIR}/lib/
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer
     )
 
-    install(FILES ${CATKIN_DEVEL_PREFIX}/lib/libvisiontransfer.so
-        DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer/lib/libvisiontransfer.so
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
     )
 
     install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer/visiontransfer
-        DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/include
         FILES_MATCHING PATTERN "*.h"
         PATTERN "CMakeFiles" EXCLUDE
     )
 
+    include_directories(
+        ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer
+        ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/nvcom/helpers
+    )
+
     link_directories(${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer/lib)
+    set(VISION_TRANSFER_LINKDIR ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer/lib)
+    message(STATUS "Local libvisiontransfer link directory is: ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer/lib")
 
     set(COLORCODER_SOURCE_FILE ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/nvcom/helpers/colorcoder.cpp)
 
@@ -111,9 +116,15 @@ else()
     # Development settings: Use local libvisiontransfer
     message(STATUS "Using local libvisiontransfer with LIB: $ENV{VISION_TRANSFER_LIB}   INCL: $ENV{VISION_TRANSFER_INCLUDE}")
     link_directories($ENV{VISION_TRANSFER_LIB})
+    set(VISION_TRANSFER_LINKDIR $ENV{VISION_TRANSFER_LIB})
     include_directories($ENV{VISION_TRANSFER_INCLUDE})
     set(COLORCODER_SOURCE_FILE $ENV{VISION_TRANSFER_INCLUDE}/../libnvshared/nvshared/imageproc/colorcoder.cpp)
     include_directories($ENV{VISION_TRANSFER_INCLUDE}/../libnvshared/nvshared/imageproc)
+
+    add_custom_target(nerian_stereo_visiontransfer_stub ALL
+        COMMAND true
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
 endif()
 
 #####################
@@ -133,9 +144,11 @@ add_executable(nerian_stereo_node
     src/nerian_stereo_node.cpp
     ${COLORCODER_SOURCE_FILE}
 )
+add_dependencies(nerian_stereo_node nerian_stereo_visiontransfer_stub)
 ament_target_dependencies(nerian_stereo_node rclcpp tf2_ros cv_bridge)
 rosidl_target_interfaces(nerian_stereo_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(nerian_stereo_node ${OpenCV_LIBS} visiontransfer)
+target_link_directories(nerian_stereo_node PRIVATE ${VISION_TRANSFER_LINKDIR})
 
 install(TARGETS
   nerian_stereo_node
