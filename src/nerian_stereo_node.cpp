@@ -359,7 +359,6 @@ void StereoNode::publishPointCloudMsg(ImageSet& imageSet, rclcpp::Time stamp) {
     // Create message object and set header
     pointCloudMsg->header.stamp = stamp;
     pointCloudMsg->header.frame_id = internalFrame;
-    //pointCloudMsg->header.seq = imageSet.getSequenceNumber(); // Actually ROS will overwrite this
 
     // Copy 3D points
     if(pointCloudMsg->data.size() != imageSet.getWidth()*imageSet.getHeight()*4*sizeof(float)) {
