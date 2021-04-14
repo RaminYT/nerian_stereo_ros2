@@ -7,7 +7,7 @@ def generate_launch_description():
                 package='nerian_stereo',
                 executable='nerian_stereo_node',
                 parameters=[
-                    {'remote_host':                  '0.0.0.0'},
+                    {'remote_host':                  '192.168.10.10'},
                     {'remote_port':                  '7681'},
                     {'use_tcp':                       False},
 
