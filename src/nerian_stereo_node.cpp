@@ -164,7 +164,7 @@ void StereoNode::prepareAsyncTransfer() {
 void StereoNode::processOneImageSet() {
     // Receive image data
     ImageSet imageSet;
-    if(asyncTransfer->collectReceivedImageSet(imageSet, 0.05)) {
+    if(asyncTransfer->collectReceivedImageSet(imageSet, 0.005)) {
 
         // Get time stamp
         rclcpp::Time stamp;
