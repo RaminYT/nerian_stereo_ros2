@@ -19,14 +19,12 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
-#find_package(rosidl_runtime_c REQUIRED)
+find_package(rosidl_default_generators) # fails on build server
 find_package(std_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(stereo_msgs REQUIRED)
-#find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 
 find_package(OpenCV REQUIRED)
@@ -84,7 +82,7 @@ if(BUILD_VT)
     # Build sources at runtime
     add_custom_target(nerian_stereo_visiontransfer_stub ALL
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software-${VT_VERSION}-src.tar.xz
-        COMMAND ${CMAKE_COMMAND} . -DCMAKE_CXX_FLAGS=${VT_CXX_FLAGS} -DDISABLE_NATIVE=1 -DDISABLE_PCL=1 -DDISABLE_OPENCV=1 -DDISABLE_PYTHON=1
+        COMMAND ${CMAKE_COMMAND} . -DCMAKE_CXX_FLAGS=${VT_CXX_FLAGS} -DDISABLE_NATIVE=1 -DDISABLE_PCL=1 -DDISABLE_OPENCV=1 -DDISABLE_PYTHON=1 -DDISABLE_OPEN3D=1
         COMMAND make
         #COMMAND cp lib/libvisiontransfer.so ${CMAKE_CURRENT_BINARY_DIR}/lib/
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer
