@@ -82,33 +82,38 @@ StereoNode::StereoNode(const std::string& name)
 void StereoNode::updateParametersFromDevice() {
     try {
         deviceParameters.reset(new DeviceParameters(remoteHost.c_str()));
-    } catch(visiontransfer::ParameterException& e) {
-        RCLCPP_ERROR(this->get_logger(), "ParameterException while connecting to parameter service: %s", e.what());
-        throw;
-    }
-    auto ssParams = deviceParameters->getAllParameters();
-    for (auto kv: ssParams) {
-        auto& name = kv.first;
-        auto& param = kv.second;
-        switch (param.getType()) {
-            case ParameterInfo::TYPE_BOOL: {
-                this->declare_parameter(name, param.getValue<bool>());
-                break;
+        auto ssParams = deviceParameters->getAllParameters();
+        for (auto kv: ssParams) {
+            auto& name = kv.first;
+            auto& param = kv.second;
+            switch (param.getType()) {
+                case ParameterInfo::TYPE_BOOL: {
+                    this->declare_parameter(name, param.getValue<bool>());
+                    break;
+                }
+                case ParameterInfo::TYPE_DOUBLE: {
+                    this->declare_parameter(name, param.getValue<double>());
+                    break;
+                }
+                case ParameterInfo::TYPE_INT: {
+                    this->declare_parameter(name, param.getValue<int>());
+                    break;
+                }
+                default:
+                    throw std::runtime_error("Received parameter of unsupported type from device");
             }
-            case ParameterInfo::TYPE_DOUBLE: {
-                this->declare_parameter(name, param.getValue<double>());
-                break;
-            }
-            case ParameterInfo::TYPE_INT: {
-                this->declare_parameter(name, param.getValue<int>());
-                break;
-            }
-            default:
-                throw std::runtime_error("Received parameter of unsupported type from device");
         }
+        availableDeviceParameters = ssParams;
+        RCLCPP_INFO(this->get_logger(), "Queried device and obtained %d device parameters", availableDeviceParameters.size());
+    } catch(visiontransfer::ParameterException& e) {
+        RCLCPP_ERROR(this->get_logger(), "ParameterException during setup of parameter service: %s", e.what());
+        RCLCPP_ERROR(this->get_logger(), "Handshake with parameter server failed; device-related parameters are unavailable - please verify firmware version. Image transport is unaffected");
+        return;
+    } catch(visiontransfer::TransferException& e) {
+        RCLCPP_ERROR(this->get_logger(), "TransferException during setup of parameter service: %s", e.what());
+        RCLCPP_ERROR(this->get_logger(), "Handshake with parameter server failed; device-related parameters are unavailable - please verify firmware version. Image transport is unaffected");
+        return;
     }
-    availableDeviceParameters = ssParams;
-    RCLCPP_INFO(this->get_logger(), "Queried device and obtained %d device parameters", availableDeviceParameters.size());
 }
 
 void StereoNode::init() {
