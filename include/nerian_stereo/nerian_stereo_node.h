@@ -126,7 +126,7 @@ private:
     // Connection to parameter server on device
     std::unique_ptr<DeviceParameters> deviceParameters;
     bool reactToParameterUpdates = false;
-    std::map<std::string, ParameterInfo> availableDeviceParameters;
+    visiontransfer::param::ParameterSet availableDeviceParameters;
     const std::set<std::string> acceptedInternalParameters = {
         "top_level_frame",
         "internal_frame",

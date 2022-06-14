@@ -1,6 +1,18 @@
 cmake_minimum_required(VERSION 3.5)
 project(nerian_stereo)
 
+# Release-specific differences
+if(DEFINED ENV{ROS_DISTRO})
+    if($ENV{ROS_DISTRO} MATCHES "galactic\|foxy\|eloquent\|dashing\|crystal\|bouncy\|ardent")
+        set(ROS2_IS_LEGACY 1)
+    else()
+        set(ROS2_IS_LEGACY 0)
+    endif()
+else()
+    message(WARNING "ROS_VERSION is not set - this should not happen. Defaulting to ROS 2 build settings for Humble or later")
+    set(ROS2_IS_LEGACY 0)
+endif()
+
 # Default to C99
 if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
@@ -41,6 +53,7 @@ if(BUILD_TESTING)
 endif()
 
 include_directories(
+    ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp
     ${CMAKE_CURRENT_LIST_DIR}/include
     ${OpenCV_INCLUDE_DIRS}
 )
@@ -143,7 +156,12 @@ add_executable(nerian_stereo_node
 )
 add_dependencies(nerian_stereo_node nerian_stereo_visiontransfer_stub)
 ament_target_dependencies(nerian_stereo_node rclcpp tf2_ros cv_bridge)
-rosidl_target_interfaces(nerian_stereo_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
+if(${ROS2_IS_LEGACY} EQUAL 1)
+    rosidl_target_interfaces(nerian_stereo_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
+else()
+    rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+    target_link_libraries(nerian_stereo_node "${cpp_typesupport_target}")
+endif()
 target_link_libraries(nerian_stereo_node ${OpenCV_LIBS} visiontransfer)
 target_link_directories(nerian_stereo_node PRIVATE ${VISION_TRANSFER_LINKDIR})
 

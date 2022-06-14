@@ -33,6 +33,7 @@ StereoNode::StereoNode(const std::string& name)
         rclcpp::NodeOptions().allow_undeclared_parameters(true)
     ), frameNum(0) {
 
+    RCLCPP_INFO(this->get_logger(), "Creating StereoNode");
     // Declare internal parameters (device parameters are reported and added later)
     this->declare_parameter("point_cloud_intensity_channel", "mono8");
     this->declare_parameter("color_code_disparity_map",      "");
@@ -81,22 +82,58 @@ StereoNode::StereoNode(const std::string& name)
 
 void StereoNode::updateParametersFromDevice() {
     try {
+        RCLCPP_INFO(this->get_logger(), "Initializing device parameters");
         deviceParameters.reset(new DeviceParameters(remoteHost.c_str()));
-        auto ssParams = deviceParameters->getAllParameters();
+        auto ssParams = deviceParameters->getParameterSet();
         for (auto kv: ssParams) {
             auto& name = kv.first;
             auto& param = kv.second;
+            auto description = param.getDescription();
+            // Metadata
+            rcl_interfaces::msg::ParameterDescriptor descriptor;
+            descriptor.read_only = (param.getAccessForApi() != visiontransfer::param::Parameter::ACCESS_READWRITE);
+            if (description != "") {
+                descriptor.description = description;
+            }
+            // Value, type and specific constraints
             switch (param.getType()) {
-                case ParameterInfo::TYPE_BOOL: {
-                    this->declare_parameter(name, param.getValue<bool>());
+                case visiontransfer::param::ParameterValue::TYPE_INT: {
+                    if (param.hasRange()) {
+                        descriptor.integer_range.resize(1);
+                        auto& range = descriptor.integer_range.at(0);
+                        range.from_value = param.getMin<int>();
+                        range.to_value = param.getMax<int>();
+                        range.step = param.hasIncrement() ? param.getIncrement<int>() : 1;
+                    }
+                    this->declare_parameter(name, param.getCurrent<int>(), descriptor);
                     break;
                 }
-                case ParameterInfo::TYPE_DOUBLE: {
-                    this->declare_parameter(name, param.getValue<double>());
+                case visiontransfer::param::ParameterValue::TYPE_DOUBLE: {
+                    if (param.hasRange()) {
+                        descriptor.floating_point_range.resize(1);
+                        auto& range = descriptor.floating_point_range.at(0);
+                        range.from_value = param.getMin<double>();
+                        range.to_value = param.getMax<double>();
+                        range.step = param.hasIncrement() ? param.getIncrement<double>() : 1e-12;
+                    }
+                    this->declare_parameter(name, param.getCurrent<double>(), descriptor);
                     break;
                 }
-                case ParameterInfo::TYPE_INT: {
-                    this->declare_parameter(name, param.getValue<int>());
+                case visiontransfer::param::ParameterValue::TYPE_BOOL: {
+                    this->declare_parameter(name, param.getCurrent<bool>(), descriptor);
+                    break;
+                }
+                case visiontransfer::param::ParameterValue::TYPE_STRING:
+                case visiontransfer::param::ParameterValue::TYPE_SAFESTRING: {
+                    this->declare_parameter(name, param.getCurrent<std::string>(), descriptor);
+                    break;
+                }
+                case visiontransfer::param::ParameterValue::TYPE_TENSOR: {
+                    // Not directly mappable to ROS parameter; could serialize as (read-only) string
+                }
+                case visiontransfer::param::ParameterValue::TYPE_COMMAND: {
+                    // Expose commands as simple trigger toggles (e.g. for reboot)
+                    this->declare_parameter(name, ((bool) false), descriptor);
                     break;
                 }
                 default:
@@ -104,7 +141,7 @@ void StereoNode::updateParametersFromDevice() {
             }
         }
         availableDeviceParameters = ssParams;
-        RCLCPP_INFO(this->get_logger(), "Queried device and obtained %d device parameters", availableDeviceParameters.size());
+        RCLCPP_INFO(this->get_logger(), "Queried device and obtained %d device parameters", (int) availableDeviceParameters.size());
     } catch(visiontransfer::ParameterException& e) {
         RCLCPP_ERROR(this->get_logger(), "ParameterException during setup of parameter service: %s", e.what());
         RCLCPP_ERROR(this->get_logger(), "Handshake with parameter server failed; device-related parameters are unavailable - please verify firmware version. Image transport is unaffected");
@@ -118,6 +155,7 @@ void StereoNode::updateParametersFromDevice() {
 
 void StereoNode::init() {
 
+    RCLCPP_INFO(this->get_logger(), "Initializing StereoNode");
     // Apply an initial delay if configured
     std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000.0*execDelay)));
 
@@ -750,39 +788,44 @@ rcl_interfaces::msg::SetParametersResult StereoNode::onSetParameters(std::vector
                     RCLCPP_ERROR(this->get_logger(), "(Bug?) Unhandled internal parameter, cannot set '%s' to %s", name.c_str(), parameter.value_to_string().c_str());
                     result.successful = false;
                 }
-            } else if (availableDeviceParameters.count(name)) {
+            } else if (availableDeviceParameters.count(name)) { // TODO modify this to use internal ParameterSet
                 bool ok = true;
-                auto& reg = availableDeviceParameters[name];
-                switch (parameter_type) {
-                    case rclcpp::ParameterType::PARAMETER_INTEGER: {
-                        // Apply increment
-                        int val = (parameter.as_int() / reg.getInc<int>()) * reg.getInc<int>();
-                        if (val >= reg.getMin<int>() &&  val <= reg.getMax<int>()) {
-                            deviceParameters->setNamedParameter(name, val);
-                        } else {
-                            RCLCPP_ERROR(this->get_logger(), "Refusing to set out-of-range parameter value '%s' to %s, valid range is %d -- %d", name.c_str(), parameter.value_to_string().c_str(), reg.getMin<int>(), reg.getMax<int>());
+                try {
+                    switch (parameter_type) {
+                        case rclcpp::ParameterType::PARAMETER_INTEGER: {
+                            deviceParameters->setParameter(name, (int) parameter.as_int());
+                            ok = true;
+                            break;
+                        }
+                        case rclcpp::ParameterType::PARAMETER_DOUBLE: {
+                            deviceParameters->setParameter(name, (double) parameter.as_double());
+                            ok = true;
+                            break;
+                        }
+                        case rclcpp::ParameterType::PARAMETER_BOOL: {
+                            deviceParameters->setParameter(name, (bool) parameter.as_bool());
+                            ok = true;
+                            break;
+                        }
+                        case rclcpp::ParameterType::PARAMETER_STRING: {
+                            std::string val = parameter.as_string();
+                            deviceParameters->setParameter(name, val);
+                            ok = true;
+                            break;
+                        }
+                        default: {
+                            RCLCPP_ERROR(this->get_logger(), "Cannot handle requested parameter type for '%s'.", name.c_str());
                             ok = false;
                         }
-                        break;
                     }
-                    case rclcpp::ParameterType::PARAMETER_DOUBLE: {
-                        double val = parameter.as_double();
-                        if (val >= reg.getMin<double>() &&  val <= reg.getMax<double>()) {
-                            deviceParameters->setNamedParameter(name, val);
-                        } else {
-                            RCLCPP_ERROR(this->get_logger(), "Refusing to set out-of-range parameter value '%s' to %s, valid range is %d -- %d", name.c_str(), parameter.value_to_string().c_str(), reg.getMin<double>(), reg.getMax<double>());
-                            ok = false;
-                        }
-                        deviceParameters->setNamedParameter(name, parameter.as_double());
-                        break;
-                    }
-                    case rclcpp::ParameterType::PARAMETER_BOOL:
-                        deviceParameters->setNamedParameter(name, parameter.as_bool());
-                        break;
-                    default: {
-                        RCLCPP_ERROR(this->get_logger(), "Cannot handle requested parameter type for '%s'.", name.c_str());
-                        ok = false;
-                    }
+                } catch(visiontransfer::ParameterException& e) {
+                    RCLCPP_ERROR(this->get_logger(), "ParameterException for parameter set operation for parameter %s: %s", name.c_str(), e.what());
+                    result.reason = e.what();
+                    ok = false;
+                } catch(visiontransfer::TransferException& e) {
+                    RCLCPP_ERROR(this->get_logger(), "TransferException for parameter set operation for parameter %s: %s", name.c_str(), e.what());
+                    result.reason = e.what();
+                    ok = false;
                 }
                 if (ok) {
                     RCLCPP_INFO(this->get_logger(), "Set device parameter '%s' to %s", name.c_str(), parameter.value_to_string().c_str());
