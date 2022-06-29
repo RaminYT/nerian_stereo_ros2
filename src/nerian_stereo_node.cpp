@@ -77,6 +77,8 @@ StereoNode::StereoNode(const std::string& name)
     execDelay = this->get_parameter("delay_execution").as_double();
     maxDepth = this->get_parameter("max_depth").as_int();
     useQFromCalibFile = this->get_parameter("q_from_calib_file").as_bool();
+    
+    lastLogTime = this->get_clock()->now();
 }
 
 void StereoNode::updateParametersFromDevice() {
@@ -168,8 +170,9 @@ void StereoNode::processOneImageSet() {
 
         // Get time stamp
         rclcpp::Time stamp;
+        rclcpp::Time timeNow = this->get_clock()->now();
         if(rosTimestamps) {
-            stamp = this->get_clock()->now();
+            stamp = timeNow;
         } else {
             int secs = 0, microsecs = 0;
             imageSet.getTimestamp(secs, microsecs);
@@ -202,14 +205,14 @@ void StereoNode::processOneImageSet() {
 
         // Display some simple statistics
         frameNum++;
-        if((int) stamp.seconds() != (int) lastLogTime.seconds()) {
+        if((int) timeNow.seconds() != (int) lastLogTime.seconds()) {
             if(lastLogTime.seconds() != 0) {
-                double dt = (stamp - lastLogTime).seconds();
+                double dt = (timeNow - lastLogTime).seconds();
                 double fps = (frameNum - lastLogFrames) / dt;
                 RCLCPP_INFO(this->get_logger(), "%.1f fps", fps);
             }
             lastLogFrames = frameNum;
-            lastLogTime = stamp;
+            lastLogTime = timeNow;
         }
     }
 }
