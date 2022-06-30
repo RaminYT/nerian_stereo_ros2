@@ -2,8 +2,8 @@
 Changelog for package nerian_stereo
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.1.0 (2022-06-30)
+------------------
 * Updated vision software relase to 10.0.0
 * Fixed potential problem with time sources in logging code
 * Support for Humble
