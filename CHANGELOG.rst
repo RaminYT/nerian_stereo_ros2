@@ -2,6 +2,15 @@
 Changelog for package nerian_stereo
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Updated vision software relase to 10.0.0
+* Fixed potential problem with time sources in logging code
+* Support for Humble
+* Initiate image transfer despite any failure to connect to parameter service.
+  (Device-related parameters are unavailable then - a verbose error is logged.)
+* Contributors: Konstantin Schauwecker, Ramin Yaghoubzadeh Torky
+
 1.0.3 (2022-03-01)
 ------------------
 * Updated vision software release
