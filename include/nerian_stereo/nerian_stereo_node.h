@@ -119,6 +119,7 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr disparityPublisher;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr leftImagePublisher;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr rightImagePublisher;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr thirdImagePublisher;
     rclcpp::Publisher<nerian_stereo::msg::StereoCameraInfo>::SharedPtr cameraInfoPublisher;
 
     std::unique_ptr<tf2_ros::TransformBroadcaster> transformBroadcaster;

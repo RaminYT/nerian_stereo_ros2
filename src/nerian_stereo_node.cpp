@@ -168,6 +168,7 @@ void StereoNode::init() {
     disparityPublisher = this->create_publisher<sensor_msgs::msg::Image>("/nerian_stereo/disparity_map", 5);
     leftImagePublisher = this->create_publisher<sensor_msgs::msg::Image>("/nerian_stereo/left_image", 5);
     rightImagePublisher = this->create_publisher<sensor_msgs::msg::Image>("/nerian_stereo/right_image", 5);
+    thirdImagePublisher = this->create_publisher<sensor_msgs::msg::Image>("/nerian_stereo/color_image", 5);
 
     loadCameraCalibration();
 
@@ -231,6 +232,9 @@ void StereoNode::processOneImageSet() {
         }
         if (imageSet.hasImageType(ImageSet::IMAGE_RIGHT)) {
             publishImageMsg(imageSet, imageSet.getIndexOf(ImageSet::IMAGE_RIGHT), stamp, false, rightImagePublisher);
+        }
+        if (imageSet.hasImageType(ImageSet::IMAGE_COLOR)) {
+            publishImageMsg(imageSet, imageSet.getIndexOf(ImageSet::IMAGE_COLOR), stamp, false, thirdImagePublisher);
         }
 
         if(cloudPublisher->get_subscription_count() > 0) {
@@ -435,7 +439,7 @@ void StereoNode::publishPointCloudMsg(ImageSet& imageSet, rclcpp::Time stamp) {
         }
     }
 
-    if (imageSet.hasImageType(ImageSet::IMAGE_LEFT)) {
+    if (imageSet.hasImageType(ImageSet::IMAGE_LEFT) || imageSet.hasImageType(ImageSet::IMAGE_COLOR)) {
         // Copy intensity values as well (if we received any image data)
         switch(pointCloudColorMode) {
             case INTENSITY:
@@ -456,16 +460,17 @@ void StereoNode::publishPointCloudMsg(ImageSet& imageSet, rclcpp::Time stamp) {
 }
 
 template <StereoNode::PointCloudColorMode colorMode> void StereoNode::copyPointCloudIntensity(ImageSet& imageSet) {
+    auto imageIndex = imageSet.hasImageType(ImageSet::IMAGE_COLOR) ? ImageSet::IMAGE_COLOR : ImageSet::IMAGE_LEFT;
     // Get pointers to the beginning and end of the point cloud
     unsigned char* cloudStart = &pointCloudMsg->data[0];
     unsigned char* cloudEnd = &pointCloudMsg->data[0]
         + imageSet.getWidth()*imageSet.getHeight()*4*sizeof(float);
 
-    if(imageSet.getPixelFormat(ImageSet::IMAGE_LEFT) == ImageSet::FORMAT_8_BIT_MONO) {
+    if(imageSet.getPixelFormat(imageIndex) == ImageSet::FORMAT_8_BIT_MONO) {
         // Get pointer to the current pixel and end of current row
-        unsigned char* imagePtr = imageSet.getPixelData(ImageSet::IMAGE_LEFT);
+        unsigned char* imagePtr = imageSet.getPixelData(imageIndex);
         unsigned char* rowEndPtr = imagePtr + imageSet.getWidth();
-        int rowIncrement = imageSet.getRowStride(ImageSet::IMAGE_LEFT) - imageSet.getWidth();
+        int rowIncrement = imageSet.getRowStride(imageIndex) - imageSet.getWidth();
 
         for(unsigned char* cloudPtr = cloudStart + 3*sizeof(float);
                 cloudPtr < cloudEnd; cloudPtr+= 4*sizeof(float)) {
@@ -485,11 +490,11 @@ template <StereoNode::PointCloudColorMode colorMode> void StereoNode::copyPointC
                 rowEndPtr = imagePtr + imageSet.getWidth();
             }
         }
-    } else if(imageSet.getPixelFormat(ImageSet::IMAGE_LEFT) == ImageSet::FORMAT_12_BIT_MONO) {
+    } else if(imageSet.getPixelFormat(imageIndex) == ImageSet::FORMAT_12_BIT_MONO) {
         // Get pointer to the current pixel and end of current row
-        unsigned short* imagePtr = reinterpret_cast<unsigned short*>(imageSet.getPixelData(ImageSet::IMAGE_LEFT));
+        unsigned short* imagePtr = reinterpret_cast<unsigned short*>(imageSet.getPixelData(imageIndex));
         unsigned short* rowEndPtr = imagePtr + imageSet.getWidth();
-        int rowIncrement = imageSet.getRowStride(ImageSet::IMAGE_LEFT) - 2*imageSet.getWidth();
+        int rowIncrement = imageSet.getRowStride(imageIndex) - 2*imageSet.getWidth();
 
         for(unsigned char* cloudPtr = cloudStart + 3*sizeof(float);
                 cloudPtr < cloudEnd; cloudPtr+= 4*sizeof(float)) {
@@ -510,11 +515,11 @@ template <StereoNode::PointCloudColorMode colorMode> void StereoNode::copyPointC
                 rowEndPtr = imagePtr + imageSet.getWidth();
             }
         }
-    } else if(imageSet.getPixelFormat(ImageSet::IMAGE_LEFT) == ImageSet::FORMAT_8_BIT_RGB) {
+    } else if(imageSet.getPixelFormat(imageIndex) == ImageSet::FORMAT_8_BIT_RGB) {
         // Get pointer to the current pixel and end of current row
-        unsigned char* imagePtr = imageSet.getPixelData(ImageSet::IMAGE_LEFT);
+        unsigned char* imagePtr = imageSet.getPixelData(imageIndex);
         unsigned char* rowEndPtr = imagePtr + 3*imageSet.getWidth();
-        int rowIncrement = imageSet.getRowStride(ImageSet::IMAGE_LEFT) - 3*imageSet.getWidth();
+        int rowIncrement = imageSet.getRowStride(imageIndex) - 3*imageSet.getWidth();
 
         static bool warned = false;
         if(colorMode == RGB_SEPARATE && !warned) {
