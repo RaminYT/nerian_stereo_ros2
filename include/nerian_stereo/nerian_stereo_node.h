@@ -175,6 +175,9 @@ private:
     nerian_stereo::msg::StereoCameraInfo::UniquePtr camInfoMsg;
     rclcpp::Time lastCamInfoPublish;
 
+    // Active channels in the previous ImageSet
+    bool hadLeft, hadRight, hadColor, hadDisparity;
+
     std::unique_ptr<AsyncTransfer> asyncTransfer;
     rclcpp::Time lastLogTime;
     int lastLogFrames = 0;

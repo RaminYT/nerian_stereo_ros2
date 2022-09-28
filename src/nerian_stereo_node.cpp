@@ -223,18 +223,42 @@ void StereoNode::processOneImageSet() {
             stamp = rclcpp::Time(secs, microsecs*1000);
         }
 
+        bool hasLeft = false, hasRight = false, hasColor = false, hasDisparity = false;
+
         // Publish image data messages for all images included in the set
         if (imageSet.hasImageType(ImageSet::IMAGE_LEFT)) {
             publishImageMsg(imageSet, imageSet.getIndexOf(ImageSet::IMAGE_LEFT), stamp, false, leftImagePublisher);
+            hasLeft = true;
         }
         if (imageSet.hasImageType(ImageSet::IMAGE_DISPARITY)) {
             publishImageMsg(imageSet, imageSet.getIndexOf(ImageSet::IMAGE_DISPARITY), stamp, true, disparityPublisher);
+            hasDisparity = true;
         }
         if (imageSet.hasImageType(ImageSet::IMAGE_RIGHT)) {
             publishImageMsg(imageSet, imageSet.getIndexOf(ImageSet::IMAGE_RIGHT), stamp, false, rightImagePublisher);
+            hasRight = true;
         }
         if (imageSet.hasImageType(ImageSet::IMAGE_COLOR)) {
             publishImageMsg(imageSet, imageSet.getIndexOf(ImageSet::IMAGE_COLOR), stamp, false, thirdImagePublisher);
+            hasColor = true;
+        }
+
+        // Dump info about currently available topics (this can change when output channels are toggled)
+        if ((frameNum==0) || (hasLeft!=hadLeft) || (hasRight!=hadRight) || (hasColor!=hadColor) || (hasDisparity!=hadDisparity)) {
+            RCLCPP_INFO(this->get_logger(), "Topics currently being served, based on the device \"Output Channels\" settings:");
+            if (hasLeft) RCLCPP_INFO(this->get_logger(),  "  /nerian_stereo/left_image");
+            if (hasRight) RCLCPP_INFO(this->get_logger(), "  /nerian_stereo/right_image");
+            if (hasColor) RCLCPP_INFO(this->get_logger(), "  /nerian_stereo/color_image");
+            if (hasDisparity) {
+                RCLCPP_INFO(this->get_logger(), "  /nerian_stereo/disparity_map");
+                RCLCPP_INFO(this->get_logger(), "  /nerian_stereo/point_cloud");
+            } else {
+                RCLCPP_WARN(this->get_logger(), "Disparity channel deactivated on device -> no disparity or point cloud data!");
+            }
+            hadLeft = hasLeft;
+            hadRight = hasRight;
+            hadColor = hasColor;
+            hadDisparity = hasDisparity;
         }
 
         if(cloudPublisher->get_subscription_count() > 0) {
