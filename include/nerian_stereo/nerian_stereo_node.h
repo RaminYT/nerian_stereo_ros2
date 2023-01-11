@@ -107,6 +107,13 @@ public:
      */
     void publishTransform();
 
+    /*
+     * \brief Enable additional ROS2 log messages related to parameter setup.
+     */
+    void enableDebugMessagesParameters(bool enable=true) {
+        debugMessagesParameters = enable;
+    }
+
 private:
     enum PointCloudColorMode {
         RGB_SEPARATE,
@@ -188,6 +195,9 @@ private:
     std::unique_ptr<DataChannelService> dataChannelService;
     // Our transform, updated with polled IMU data (if available)
     geometry_msgs::msg::TransformStamped currentTransform;
+
+    // Extra debug messages
+    bool debugMessagesParameters;
 
     /**
      * \brief Loads a camera calibration file if configured
