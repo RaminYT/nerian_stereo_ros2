@@ -107,6 +107,13 @@ public:
      */
     void publishTransform();
 
+    /*
+     * \brief Enable additional ROS2 log messages related to parameter setup.
+     */
+    void enableDebugMessagesParameters(bool enable=true) {
+        debugMessagesParameters = enable;
+    }
+
 private:
     enum PointCloudColorMode {
         RGB_SEPARATE,
@@ -119,6 +126,7 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr disparityPublisher;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr leftImagePublisher;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr rightImagePublisher;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr thirdImagePublisher;
     rclcpp::Publisher<nerian_stereo::msg::StereoCameraInfo>::SharedPtr cameraInfoPublisher;
 
     std::unique_ptr<tf2_ros::TransformBroadcaster> transformBroadcaster;
@@ -174,6 +182,9 @@ private:
     nerian_stereo::msg::StereoCameraInfo::UniquePtr camInfoMsg;
     rclcpp::Time lastCamInfoPublish;
 
+    // Active channels in the previous ImageSet
+    bool hadLeft, hadRight, hadColor, hadDisparity;
+
     std::unique_ptr<AsyncTransfer> asyncTransfer;
     rclcpp::Time lastLogTime;
     int lastLogFrames = 0;
@@ -184,6 +195,9 @@ private:
     std::unique_ptr<DataChannelService> dataChannelService;
     // Our transform, updated with polled IMU data (if available)
     geometry_msgs::msg::TransformStamped currentTransform;
+
+    // Extra debug messages
+    bool debugMessagesParameters;
 
     /**
      * \brief Loads a camera calibration file if configured

@@ -17,6 +17,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <cstdlib>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
@@ -31,9 +32,121 @@ StereoNode::StereoNode(const std::string& name)
 : rclcpp::Node(
         name,
         rclcpp::NodeOptions().allow_undeclared_parameters(true)
-    ), frameNum(0) {
+    ), frameNum(0), debugMessagesParameters(false) {
 
     RCLCPP_INFO(this->get_logger(), "Creating StereoNode");
+}
+
+void StereoNode::updateParametersFromDevice() {
+    try {
+        RCLCPP_INFO(this->get_logger(), "Initializing device parameters");
+        deviceParameters.reset(new DeviceParameters(remoteHost.c_str()));
+        auto ssParams = deviceParameters->getParameterSet();
+        for (auto kv: ssParams) {
+            auto& name = kv.first;
+            auto& param = kv.second;
+            auto description = param.getDescription();
+            // Metadata
+            rcl_interfaces::msg::ParameterDescriptor descriptor;
+            descriptor.read_only = (param.getAccessForApi() != visiontransfer::param::Parameter::ACCESS_READWRITE);
+            if (description != "") {
+                descriptor.description = description;
+            }
+            // Value, type and specific constraints
+            switch (param.getType()) {
+                case visiontransfer::param::ParameterValue::TYPE_INT: {
+                    if (param.hasRange()) {
+                        descriptor.integer_range.resize(1);
+                        auto& range = descriptor.integer_range.at(0);
+                        range.from_value = param.getMin<int>();
+                        range.to_value = param.getMax<int>();
+                        range.step = param.hasIncrement() ? param.getIncrement<int>() : 0;
+                    }
+                    if (debugMessagesParameters) {
+                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (int), current value %d", name.c_str(), param.getCurrent<int>());
+                        if (param.hasRange()) {
+                            RCLCPP_INFO(this->get_logger(), "  with range %d..%d", param.getMin<int>(), param.getMax<int>());
+                            if (param.hasIncrement()) {
+                                RCLCPP_INFO(this->get_logger(), "  with increment %d", param.getIncrement<int>());
+                            }
+                        }
+                    }
+                    this->declare_parameter(name, param.getCurrent<int>(), descriptor);
+                    break;
+                }
+                case visiontransfer::param::ParameterValue::TYPE_DOUBLE: {
+                    if (param.hasRange()) {
+                        descriptor.floating_point_range.resize(1);
+                        auto& range = descriptor.floating_point_range.at(0);
+                        range.from_value = param.getMin<double>();
+                        range.to_value = param.getMax<double>();
+                        range.step = param.hasIncrement() ? param.getIncrement<double>() : 0.0;
+                    }
+                    if (debugMessagesParameters) {
+                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (double), current value %f", name.c_str(), param.getCurrent<double>());
+                        if (param.hasRange()) {
+                            RCLCPP_INFO(this->get_logger(), "  with range %f..%f", param.getMin<double>(), param.getMax<double>());
+                            if (param.hasIncrement()) {
+                                RCLCPP_INFO(this->get_logger(), "  with increment %f", param.getIncrement<double>());
+                            }
+                        }
+                    }
+                    this->declare_parameter(name, param.getCurrent<double>(), descriptor);
+                    break;
+                }
+                case visiontransfer::param::ParameterValue::TYPE_BOOL: {
+                    if (debugMessagesParameters) {
+                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (bool), current value %s", name.c_str(), param.getCurrent<bool>()?"true":"false");
+                    }
+                    this->declare_parameter(name, param.getCurrent<bool>(), descriptor);
+                    break;
+                }
+                case visiontransfer::param::ParameterValue::TYPE_STRING:
+                case visiontransfer::param::ParameterValue::TYPE_SAFESTRING: {
+                    if (debugMessagesParameters) {
+                        auto curVal = param.getCurrent<std::string>();
+                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (str), current value %s", name.c_str(), curVal.c_str());
+                    }
+                    this->declare_parameter(name, param.getCurrent<std::string>(), descriptor);
+                    break;
+                }
+                case visiontransfer::param::ParameterValue::TYPE_TENSOR: {
+                    // Not directly mappable to ROS parameter; could serialize as (read-only) string
+                    if (debugMessagesParameters) {
+                        auto curVal = param.getCurrent<std::string>();
+                        RCLCPP_INFO(this->get_logger(), " Omitting parameter %s (tensor)", name.c_str());
+                    }
+                    break;
+                }
+                case visiontransfer::param::ParameterValue::TYPE_COMMAND: {
+                    // Expose commands as simple trigger toggles (e.g. for reboot)
+                    if (debugMessagesParameters) {
+                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (command)", name.c_str());
+                    }
+                    this->declare_parameter(name, ((bool) false), descriptor);
+                    break;
+                }
+                default:
+                    throw std::runtime_error("Received parameter of unsupported type from device");
+            }
+        }
+        availableDeviceParameters = ssParams;
+        RCLCPP_INFO(this->get_logger(), "Queried device and obtained %d device parameters", (int) availableDeviceParameters.size());
+    } catch(visiontransfer::ParameterException& e) {
+        RCLCPP_ERROR(this->get_logger(), "ParameterException during setup of parameter service: %s", e.what());
+        RCLCPP_ERROR(this->get_logger(), "Handshake with parameter server failed; device-related parameters are unavailable - please verify firmware version. Image transport is unaffected");
+        return;
+    } catch(visiontransfer::TransferException& e) {
+        RCLCPP_ERROR(this->get_logger(), "TransferException during setup of parameter service: %s", e.what());
+        RCLCPP_ERROR(this->get_logger(), "Handshake with parameter server failed; device-related parameters are unavailable - please verify firmware version. Image transport is unaffected");
+        return;
+    }
+}
+
+void StereoNode::init() {
+
+    RCLCPP_INFO(this->get_logger(), "Initializing StereoNode");
+
     // Declare internal parameters (device parameters are reported and added later)
     this->declare_parameter("point_cloud_intensity_channel", "mono8");
     this->declare_parameter("color_code_disparity_map",      "");
@@ -78,86 +191,9 @@ StereoNode::StereoNode(const std::string& name)
     execDelay = this->get_parameter("delay_execution").as_double();
     maxDepth = this->get_parameter("max_depth").as_int();
     useQFromCalibFile = this->get_parameter("q_from_calib_file").as_bool();
-    
+
     lastLogTime = this->get_clock()->now();
-}
 
-void StereoNode::updateParametersFromDevice() {
-    try {
-        RCLCPP_INFO(this->get_logger(), "Initializing device parameters");
-        deviceParameters.reset(new DeviceParameters(remoteHost.c_str()));
-        auto ssParams = deviceParameters->getParameterSet();
-        for (auto kv: ssParams) {
-            auto& name = kv.first;
-            auto& param = kv.second;
-            auto description = param.getDescription();
-            // Metadata
-            rcl_interfaces::msg::ParameterDescriptor descriptor;
-            descriptor.read_only = (param.getAccessForApi() != visiontransfer::param::Parameter::ACCESS_READWRITE);
-            if (description != "") {
-                descriptor.description = description;
-            }
-            // Value, type and specific constraints
-            switch (param.getType()) {
-                case visiontransfer::param::ParameterValue::TYPE_INT: {
-                    if (param.hasRange()) {
-                        descriptor.integer_range.resize(1);
-                        auto& range = descriptor.integer_range.at(0);
-                        range.from_value = param.getMin<int>();
-                        range.to_value = param.getMax<int>();
-                        range.step = param.hasIncrement() ? param.getIncrement<int>() : 1;
-                    }
-                    this->declare_parameter(name, param.getCurrent<int>(), descriptor);
-                    break;
-                }
-                case visiontransfer::param::ParameterValue::TYPE_DOUBLE: {
-                    if (param.hasRange()) {
-                        descriptor.floating_point_range.resize(1);
-                        auto& range = descriptor.floating_point_range.at(0);
-                        range.from_value = param.getMin<double>();
-                        range.to_value = param.getMax<double>();
-                        range.step = param.hasIncrement() ? param.getIncrement<double>() : 1e-12;
-                    }
-                    this->declare_parameter(name, param.getCurrent<double>(), descriptor);
-                    break;
-                }
-                case visiontransfer::param::ParameterValue::TYPE_BOOL: {
-                    this->declare_parameter(name, param.getCurrent<bool>(), descriptor);
-                    break;
-                }
-                case visiontransfer::param::ParameterValue::TYPE_STRING:
-                case visiontransfer::param::ParameterValue::TYPE_SAFESTRING: {
-                    this->declare_parameter(name, param.getCurrent<std::string>(), descriptor);
-                    break;
-                }
-                case visiontransfer::param::ParameterValue::TYPE_TENSOR: {
-                    // Not directly mappable to ROS parameter; could serialize as (read-only) string
-                }
-                case visiontransfer::param::ParameterValue::TYPE_COMMAND: {
-                    // Expose commands as simple trigger toggles (e.g. for reboot)
-                    this->declare_parameter(name, ((bool) false), descriptor);
-                    break;
-                }
-                default:
-                    throw std::runtime_error("Received parameter of unsupported type from device");
-            }
-        }
-        availableDeviceParameters = ssParams;
-        RCLCPP_INFO(this->get_logger(), "Queried device and obtained %d device parameters", (int) availableDeviceParameters.size());
-    } catch(visiontransfer::ParameterException& e) {
-        RCLCPP_ERROR(this->get_logger(), "ParameterException during setup of parameter service: %s", e.what());
-        RCLCPP_ERROR(this->get_logger(), "Handshake with parameter server failed; device-related parameters are unavailable - please verify firmware version. Image transport is unaffected");
-        return;
-    } catch(visiontransfer::TransferException& e) {
-        RCLCPP_ERROR(this->get_logger(), "TransferException during setup of parameter service: %s", e.what());
-        RCLCPP_ERROR(this->get_logger(), "Handshake with parameter server failed; device-related parameters are unavailable - please verify firmware version. Image transport is unaffected");
-        return;
-    }
-}
-
-void StereoNode::init() {
-
-    RCLCPP_INFO(this->get_logger(), "Initializing StereoNode");
     // Apply an initial delay if configured
     std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000.0*execDelay)));
 
@@ -168,6 +204,7 @@ void StereoNode::init() {
     disparityPublisher = this->create_publisher<sensor_msgs::msg::Image>("/nerian_stereo/disparity_map", 5);
     leftImagePublisher = this->create_publisher<sensor_msgs::msg::Image>("/nerian_stereo/left_image", 5);
     rightImagePublisher = this->create_publisher<sensor_msgs::msg::Image>("/nerian_stereo/right_image", 5);
+    thirdImagePublisher = this->create_publisher<sensor_msgs::msg::Image>("/nerian_stereo/color_image", 5);
 
     loadCameraCalibration();
 
@@ -222,15 +259,42 @@ void StereoNode::processOneImageSet() {
             stamp = rclcpp::Time(secs, microsecs*1000);
         }
 
+        bool hasLeft = false, hasRight = false, hasColor = false, hasDisparity = false;
+
         // Publish image data messages for all images included in the set
         if (imageSet.hasImageType(ImageSet::IMAGE_LEFT)) {
             publishImageMsg(imageSet, imageSet.getIndexOf(ImageSet::IMAGE_LEFT), stamp, false, leftImagePublisher);
+            hasLeft = true;
         }
         if (imageSet.hasImageType(ImageSet::IMAGE_DISPARITY)) {
             publishImageMsg(imageSet, imageSet.getIndexOf(ImageSet::IMAGE_DISPARITY), stamp, true, disparityPublisher);
+            hasDisparity = true;
         }
         if (imageSet.hasImageType(ImageSet::IMAGE_RIGHT)) {
             publishImageMsg(imageSet, imageSet.getIndexOf(ImageSet::IMAGE_RIGHT), stamp, false, rightImagePublisher);
+            hasRight = true;
+        }
+        if (imageSet.hasImageType(ImageSet::IMAGE_COLOR)) {
+            publishImageMsg(imageSet, imageSet.getIndexOf(ImageSet::IMAGE_COLOR), stamp, false, thirdImagePublisher);
+            hasColor = true;
+        }
+
+        // Dump info about currently available topics (this can change when output channels are toggled)
+        if ((frameNum==0) || (hasLeft!=hadLeft) || (hasRight!=hadRight) || (hasColor!=hadColor) || (hasDisparity!=hadDisparity)) {
+            RCLCPP_INFO(this->get_logger(), "Topics currently being served, based on the device \"Output Channels\" settings:");
+            if (hasLeft) RCLCPP_INFO(this->get_logger(),  "  /nerian_stereo/left_image");
+            if (hasRight) RCLCPP_INFO(this->get_logger(), "  /nerian_stereo/right_image");
+            if (hasColor) RCLCPP_INFO(this->get_logger(), "  /nerian_stereo/color_image");
+            if (hasDisparity) {
+                RCLCPP_INFO(this->get_logger(), "  /nerian_stereo/disparity_map");
+                RCLCPP_INFO(this->get_logger(), "  /nerian_stereo/point_cloud");
+            } else {
+                RCLCPP_WARN(this->get_logger(), "Disparity channel deactivated on device -> no disparity or point cloud data!");
+            }
+            hadLeft = hasLeft;
+            hadRight = hasRight;
+            hadColor = hasColor;
+            hadDisparity = hasDisparity;
         }
 
         if(cloudPublisher->get_subscription_count() > 0) {
@@ -435,7 +499,7 @@ void StereoNode::publishPointCloudMsg(ImageSet& imageSet, rclcpp::Time stamp) {
         }
     }
 
-    if (imageSet.hasImageType(ImageSet::IMAGE_LEFT)) {
+    if (imageSet.hasImageType(ImageSet::IMAGE_LEFT) || imageSet.hasImageType(ImageSet::IMAGE_COLOR)) {
         // Copy intensity values as well (if we received any image data)
         switch(pointCloudColorMode) {
             case INTENSITY:
@@ -456,16 +520,17 @@ void StereoNode::publishPointCloudMsg(ImageSet& imageSet, rclcpp::Time stamp) {
 }
 
 template <StereoNode::PointCloudColorMode colorMode> void StereoNode::copyPointCloudIntensity(ImageSet& imageSet) {
+    auto imageIndex = imageSet.hasImageType(ImageSet::IMAGE_COLOR) ? ImageSet::IMAGE_COLOR : ImageSet::IMAGE_LEFT;
     // Get pointers to the beginning and end of the point cloud
     unsigned char* cloudStart = &pointCloudMsg->data[0];
     unsigned char* cloudEnd = &pointCloudMsg->data[0]
         + imageSet.getWidth()*imageSet.getHeight()*4*sizeof(float);
 
-    if(imageSet.getPixelFormat(ImageSet::IMAGE_LEFT) == ImageSet::FORMAT_8_BIT_MONO) {
+    if(imageSet.getPixelFormat(imageIndex) == ImageSet::FORMAT_8_BIT_MONO) {
         // Get pointer to the current pixel and end of current row
-        unsigned char* imagePtr = imageSet.getPixelData(ImageSet::IMAGE_LEFT);
+        unsigned char* imagePtr = imageSet.getPixelData(imageIndex);
         unsigned char* rowEndPtr = imagePtr + imageSet.getWidth();
-        int rowIncrement = imageSet.getRowStride(ImageSet::IMAGE_LEFT) - imageSet.getWidth();
+        int rowIncrement = imageSet.getRowStride(imageIndex) - imageSet.getWidth();
 
         for(unsigned char* cloudPtr = cloudStart + 3*sizeof(float);
                 cloudPtr < cloudEnd; cloudPtr+= 4*sizeof(float)) {
@@ -485,11 +550,11 @@ template <StereoNode::PointCloudColorMode colorMode> void StereoNode::copyPointC
                 rowEndPtr = imagePtr + imageSet.getWidth();
             }
         }
-    } else if(imageSet.getPixelFormat(ImageSet::IMAGE_LEFT) == ImageSet::FORMAT_12_BIT_MONO) {
+    } else if(imageSet.getPixelFormat(imageIndex) == ImageSet::FORMAT_12_BIT_MONO) {
         // Get pointer to the current pixel and end of current row
-        unsigned short* imagePtr = reinterpret_cast<unsigned short*>(imageSet.getPixelData(ImageSet::IMAGE_LEFT));
+        unsigned short* imagePtr = reinterpret_cast<unsigned short*>(imageSet.getPixelData(imageIndex));
         unsigned short* rowEndPtr = imagePtr + imageSet.getWidth();
-        int rowIncrement = imageSet.getRowStride(ImageSet::IMAGE_LEFT) - 2*imageSet.getWidth();
+        int rowIncrement = imageSet.getRowStride(imageIndex) - 2*imageSet.getWidth();
 
         for(unsigned char* cloudPtr = cloudStart + 3*sizeof(float);
                 cloudPtr < cloudEnd; cloudPtr+= 4*sizeof(float)) {
@@ -510,11 +575,11 @@ template <StereoNode::PointCloudColorMode colorMode> void StereoNode::copyPointC
                 rowEndPtr = imagePtr + imageSet.getWidth();
             }
         }
-    } else if(imageSet.getPixelFormat(ImageSet::IMAGE_LEFT) == ImageSet::FORMAT_8_BIT_RGB) {
+    } else if(imageSet.getPixelFormat(imageIndex) == ImageSet::FORMAT_8_BIT_RGB) {
         // Get pointer to the current pixel and end of current row
-        unsigned char* imagePtr = imageSet.getPixelData(ImageSet::IMAGE_LEFT);
+        unsigned char* imagePtr = imageSet.getPixelData(imageIndex);
         unsigned char* rowEndPtr = imagePtr + 3*imageSet.getWidth();
-        int rowIncrement = imageSet.getRowStride(ImageSet::IMAGE_LEFT) - 3*imageSet.getWidth();
+        int rowIncrement = imageSet.getRowStride(imageIndex) - 3*imageSet.getWidth();
 
         static bool warned = false;
         if(colorMode == RGB_SEPARATE && !warned) {
@@ -769,12 +834,18 @@ rcl_interfaces::msg::SetParametersResult StereoNode::onSetParameters(std::vector
     auto result = rcl_interfaces::msg::SetParametersResult();
     result.successful = true;
     if (!reactToParameterUpdates) return result;
+    if (debugMessagesParameters) {
+        RCLCPP_INFO(this->get_logger(), "Received request to set %ld parameter[s]:", parameters.size());
+    }
     for (auto parameter : parameters) {
         rclcpp::ParameterType parameter_type = parameter.get_type();
         std::string name = parameter.get_name();
         auto old_type = this->get_parameter(name).get_type();
         if (parameter_type == old_type) {
             if (acceptedInternalParameters.count(name)) {
+                if (debugMessagesParameters) {
+                    RCLCPP_INFO(this->get_logger(), "Request to set node-internal parameter %s to %s", name.c_str(), parameter.value_to_string().c_str());
+                }
                 if (name == "max_depth") {
                     maxDepth = parameter.as_int();
                     RCLCPP_INFO(this->get_logger(), "Set internal parameter '%s' to %s", name.c_str(), parameter.value_to_string().c_str());
@@ -793,6 +864,9 @@ rcl_interfaces::msg::SetParametersResult StereoNode::onSetParameters(std::vector
                 }
             } else if (availableDeviceParameters.count(name)) { // TODO modify this to use internal ParameterSet
                 bool ok = true;
+                if (debugMessagesParameters) {
+                    RCLCPP_INFO(this->get_logger(), "Request to set device parameter %s to %s", name.c_str(), parameter.value_to_string().c_str());
+                }
                 try {
                     switch (parameter_type) {
                         case rclcpp::ParameterType::PARAMETER_INTEGER: {
@@ -833,6 +907,10 @@ rcl_interfaces::msg::SetParametersResult StereoNode::onSetParameters(std::vector
                 if (ok) {
                     RCLCPP_INFO(this->get_logger(), "Set device parameter '%s' to %s", name.c_str(), parameter.value_to_string().c_str());
                 } else {
+                    if (debugMessagesParameters) {
+                        auto val = parameter.as_string();
+                        RCLCPP_INFO(this->get_logger(), "Failed to set parameter.");
+                    }
                     result.successful = false;
                 }
             } else if (rejectedInternalParameters.count(name)) {
@@ -863,6 +941,12 @@ int main(int argc, char * argv[])
 {
     rclcpp::init(argc, argv);
     auto node = std::make_shared<nerian_stereo::StereoNode>();
+    if (const char* debugEnvC = std::getenv("NERIAN_ROS_DEBUG")) {
+        std::string debugEnv = std::string(debugEnvC);
+        if (debugEnv.find("params") != std::string::npos) {
+            node->enableDebugMessagesParameters(true);
+        }
+    }
     node->init();
     rclcpp::spin(node);
     rclcpp::shutdown();
