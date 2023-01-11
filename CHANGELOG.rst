@@ -2,6 +2,13 @@
 Changelog for package nerian_stereo
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+Forthcoming
+-----------
+* Fixed parameter issue. Enabled NERIAN_ROS_DEBUG="params" for extra logging.
+* Added log messages about actively served topics (based on run-time conf)
+* Support for third camera (Ruby), selected for point cloud if active
+* Contributors: Dr. Konstantin Schauwecker, Ramin Yaghoubzadeh Torky
+
 1.1.0 (2022-06-30)
 ------------------
 * Updated vision software relase to 10.0.0
