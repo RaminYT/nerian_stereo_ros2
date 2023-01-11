@@ -2,8 +2,8 @@
 Changelog for package nerian_stereo
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.2.0 (2023-01-11)
+------------------
 * Fixed parameter issue. Enabled NERIAN_ROS_DEBUG="params" for extra logging.
 * Added log messages about actively served topics (based on run-time conf)
 * Support for third camera (Ruby), selected for point cloud if active
