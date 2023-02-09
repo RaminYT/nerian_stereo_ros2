@@ -165,18 +165,33 @@ add_executable(nerian_stereo_node
     src/nerian_stereo_node.cpp
     ${COLORCODER_SOURCE_FILE}
 )
+
+add_executable(camera_info_splitter
+    src/camera_info_splitter.cpp
+    ${COLORCODER_SOURCE_FILE}
+)
+
 add_dependencies(nerian_stereo_node nerian_stereo_visiontransfer_stub)
 ament_target_dependencies(nerian_stereo_node rclcpp tf2_ros cv_bridge)
+
+add_dependencies(camera_info_splitter nerian_stereo_visiontransfer_stub)
+ament_target_dependencies(camera_info_splitter rclcpp tf2_ros cv_bridge)
+
 if(${ROS2_IS_LEGACY} EQUAL 1)
     rosidl_target_interfaces(nerian_stereo_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
+    rosidl_target_interfaces(camera_info_splitter ${PROJECT_NAME} "rosidl_typesupport_cpp")
 else()
     rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
     target_link_libraries(nerian_stereo_node "${cpp_typesupport_target}")
+    target_link_libraries(camera_info_splitter "${cpp_typesupport_target}")
 endif()
 target_link_libraries(nerian_stereo_node ${OpenCV_LIBS} visiontransfer)
 target_link_directories(nerian_stereo_node PRIVATE ${VISION_TRANSFER_LINKDIR})
+target_link_libraries(camera_info_splitter ${OpenCV_LIBS} visiontransfer)
+target_link_directories(camera_info_splitter PRIVATE ${VISION_TRANSFER_LINKDIR})
 
 install(TARGETS
+  camera_info_splitter
   nerian_stereo_node
   DESTINATION lib/${PROJECT_NAME}
 )
