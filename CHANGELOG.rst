@@ -2,7 +2,7 @@
 Changelog for package nerian_stereo
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-1.1.0 (2023-02-13)
+1.1.1 (2023-02-13)
 ------------------
 * Create camera_info splitter node
 
