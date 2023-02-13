@@ -2,6 +2,10 @@
 Changelog for package nerian_stereo
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.1.0 (2023-02-13)
+------------------
+* Create camera_info splitter node
+
 1.1.0 (2022-06-30)
 ------------------
 * Updated vision software relase to 10.0.0
