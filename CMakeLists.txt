@@ -36,10 +36,6 @@ endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
-<<<<<<< HEAD
-=======
-
->>>>>>> b6a621dd03b745ac6a15f46d09ef9d5de113179d
 endif()
 
 # find dependencies
