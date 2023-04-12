@@ -38,10 +38,15 @@ StereoNode::StereoNode(const std::string& name)
 }
 
 void StereoNode::updateParametersFromDevice() {
+    // We update parameters *from* the device, but also push any parameters
+    //  that have been overridden via the ROS config to the device as well.
     try {
         RCLCPP_INFO(this->get_logger(), "Initializing device parameters");
         deviceParameters.reset(new DeviceParameters(remoteHost.c_str()));
         auto ssParams = deviceParameters->getParameterSet();
+        // The transaction lock transparently batches all updates we push to
+        //  the device into one operation emitted at the end of this scope.
+        auto transactionLock = deviceParameters->transactionLock();
         for (auto kv: ssParams) {
             auto& name = kv.first;
             auto& param = kv.second;
