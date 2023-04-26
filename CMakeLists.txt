@@ -77,8 +77,7 @@ set(BUILD_VT 1)
 
 if(BUILD_VT)
     # Build libvisiontransfer via git submodule (at specified branch)
-    #execute_process(COMMAND bash -c "cd ${CMAKE_CURRENT_SOURCE_DIR}; git submodule update --init --recursive; git submodule foreach -q --recursive 'git switch $(git config -f $toplevel/.gitmodules submodule.$name.branch || echo default)'")
-    execute_process(COMMAND bash -c "cd ${CMAKE_CURRENT_SOURCE_DIR}; git describe --tags --exact-match 2>/dev/null || git symbolic-ref -q --short HEAD" OUTPUT_VARIABLE GIT_TAG_OR_BRANCH)
+    execute_process(COMMAND bash -c "cd ${CMAKE_CURRENT_SOURCE_DIR}; grep -v '#' visiontransfer_version.conf || echo default" OUTPUT_VARIABLE GIT_TAG_OR_BRANCH)
     execute_process(COMMAND bash -c "cd ${CMAKE_CURRENT_SOURCE_DIR}; git submodule update --init --recursive; git submodule foreach -q --recursive 'git checkout ${GIT_TAG_OR_BRANCH}'; git submodule foreach -q --recursive 'git pull'")
     execute_process(COMMAND bash -c "mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software/libvisiontransfer")
 
