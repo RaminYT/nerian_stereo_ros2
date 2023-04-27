@@ -38,10 +38,15 @@ StereoNode::StereoNode(const std::string& name)
 }
 
 void StereoNode::updateParametersFromDevice() {
+    // We update parameters *from* the device, but also push any parameters
+    //  that have been overridden via the ROS config to the device as well.
     try {
         RCLCPP_INFO(this->get_logger(), "Initializing device parameters");
         deviceParameters.reset(new DeviceParameters(remoteHost.c_str()));
         auto ssParams = deviceParameters->getParameterSet();
+        // The transaction lock transparently batches all updates we push to
+        //  the device into one operation emitted at the end of this scope.
+        auto transactionLock = deviceParameters->transactionLock();
         for (auto kv: ssParams) {
             auto& name = kv.first;
             auto& param = kv.second;
@@ -55,6 +60,7 @@ void StereoNode::updateParametersFromDevice() {
             // Value, type and specific constraints
             switch (param.getType()) {
                 case visiontransfer::param::ParameterValue::TYPE_INT: {
+                    int curVal = param.getCurrent<int>();
                     if (param.hasRange()) {
                         descriptor.integer_range.resize(1);
                         auto& range = descriptor.integer_range.at(0);
@@ -63,7 +69,7 @@ void StereoNode::updateParametersFromDevice() {
                         range.step = param.hasIncrement() ? param.getIncrement<int>() : 0;
                     }
                     if (debugMessagesParameters) {
-                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (int), current value %d", name.c_str(), param.getCurrent<int>());
+                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (int), current value on device is %d", name.c_str(), curVal);
                         if (param.hasRange()) {
                             RCLCPP_INFO(this->get_logger(), "  with range %d..%d", param.getMin<int>(), param.getMax<int>());
                             if (param.hasIncrement()) {
@@ -71,10 +77,16 @@ void StereoNode::updateParametersFromDevice() {
                             }
                         }
                     }
-                    this->declare_parameter(name, param.getCurrent<int>(), descriptor);
+                    this->declare_parameter(name, curVal, descriptor);
+                    int confVal = this->get_parameter(name.c_str()).as_int();
+                    if (confVal != curVal) {
+                        RCLCPP_INFO(this->get_logger(), "Updating device parameter with ROS-defined value: %s := %d", name.c_str(), confVal);
+                        deviceParameters->setParameter(name, confVal);
+                    }
                     break;
                 }
                 case visiontransfer::param::ParameterValue::TYPE_DOUBLE: {
+                    double curVal = param.getCurrent<double>();
                     if (param.hasRange()) {
                         descriptor.floating_point_range.resize(1);
                         auto& range = descriptor.floating_point_range.at(0);
@@ -83,7 +95,7 @@ void StereoNode::updateParametersFromDevice() {
                         range.step = param.hasIncrement() ? param.getIncrement<double>() : 0.0;
                     }
                     if (debugMessagesParameters) {
-                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (double), current value %f", name.c_str(), param.getCurrent<double>());
+                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (double), current value on device is %f", name.c_str(), curVal);
                         if (param.hasRange()) {
                             RCLCPP_INFO(this->get_logger(), "  with range %f..%f", param.getMin<double>(), param.getMax<double>());
                             if (param.hasIncrement()) {
@@ -91,23 +103,39 @@ void StereoNode::updateParametersFromDevice() {
                             }
                         }
                     }
-                    this->declare_parameter(name, param.getCurrent<double>(), descriptor);
+                    this->declare_parameter(name, curVal, descriptor);
+                    double confVal = this->get_parameter(name.c_str()).as_double();
+                    if (confVal != curVal) {
+                        RCLCPP_INFO(this->get_logger(), "Updating device parameter with ROS-defined value: %s := %f", name.c_str(), confVal);
+                        deviceParameters->setParameter(name, confVal);
+                    }
                     break;
                 }
                 case visiontransfer::param::ParameterValue::TYPE_BOOL: {
+                    bool curVal = param.getCurrent<bool>();
                     if (debugMessagesParameters) {
-                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (bool), current value %s", name.c_str(), param.getCurrent<bool>()?"true":"false");
+                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (bool), current value on device is %s", name.c_str(), curVal?"true":"false");
                     }
                     this->declare_parameter(name, param.getCurrent<bool>(), descriptor);
+                    bool confVal = this->get_parameter(name.c_str()).as_bool();
+                    if (confVal != curVal) {
+                        RCLCPP_INFO(this->get_logger(), "Updating device parameter with ROS-defined value: %s := %s", name.c_str(), (confVal?"true":"false"));
+                        deviceParameters->setParameter(name, confVal);
+                    }
                     break;
                 }
                 case visiontransfer::param::ParameterValue::TYPE_STRING:
                 case visiontransfer::param::ParameterValue::TYPE_SAFESTRING: {
+                    auto curVal = param.getCurrent<std::string>();
                     if (debugMessagesParameters) {
-                        auto curVal = param.getCurrent<std::string>();
-                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (str), current value %s", name.c_str(), curVal.c_str());
+                        RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (str), current value on device is %s", name.c_str(), curVal.c_str());
                     }
                     this->declare_parameter(name, param.getCurrent<std::string>(), descriptor);
+                    std::string confVal = std::string(this->get_parameter(name.c_str()).as_string());
+                    if (confVal != curVal) {
+                        RCLCPP_INFO(this->get_logger(), "Updating device parameter with ROS-defined value: %s := %s", name.c_str(), confVal.c_str());
+                        deviceParameters->setParameter(name, confVal);
+                    }
                     break;
                 }
                 case visiontransfer::param::ParameterValue::TYPE_TENSOR: {
@@ -124,6 +152,7 @@ void StereoNode::updateParametersFromDevice() {
                         RCLCPP_INFO(this->get_logger(), " Declaring parameter %s (command)", name.c_str());
                     }
                     this->declare_parameter(name, ((bool) false), descriptor);
+                    // At init time, commands are *not* written to/updated from any ROS parameter value
                     break;
                 }
                 default:

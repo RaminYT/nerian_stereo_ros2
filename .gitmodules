@@ -1,0 +1,4 @@
+[submodule "3rdparty/nerian-vision-software"]
+	path = 3rdparty/nerian-vision-software
+	url = https://github.com/nerian-vision/nerian-vision-software
+

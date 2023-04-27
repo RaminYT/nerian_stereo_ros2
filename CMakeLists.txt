@@ -76,23 +76,10 @@ include_directories(
 set(BUILD_VT 1)
 
 if(BUILD_VT)
-    # Find lib vision transfer
-    execute_process(COMMAND bash -c "ls ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian*.tar.xz | sed -e 's/.*software-\\(.*\\)-src.tar.xz/\\1/' | sort -V | tail -1" OUTPUT_VARIABLE VT_VERSION)
-    string(REGEX REPLACE " *\n$" "" VT_VERSION "${VT_VERSION}")
-
-    if(NOT VT_VERSION)
-        message(FATAL_ERROR "libvisiontransfer not found!")
-    endif()
-    message(STATUS "Detected libvisiontransfer version: ${VT_VERSION}")
-
-    # Extract sources while configuring
-    execute_process(COMMAND tar --keep-newer-files --warning none -xJf ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software-${VT_VERSION}-src.tar.xz -C ${CMAKE_CURRENT_BINARY_DIR})
-
-    # Re-extract source files if updated
-    add_custom_target(nerian_stereo_untar_src ALL
-        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software-${VT_VERSION}-src.tar.xz
-        COMMAND tar --keep-newer-files --warning none -xJf ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software-${VT_VERSION}-src.tar.xz -C ${CMAKE_CURRENT_BINARY_DIR}
-    )
+    # Build libvisiontransfer via git submodule (at specified branch)
+    execute_process(COMMAND bash -c "cd ${CMAKE_CURRENT_SOURCE_DIR}; grep -v '#' visiontransfer_version.conf || echo default" OUTPUT_VARIABLE GIT_TAG_OR_BRANCH)
+    execute_process(COMMAND bash -c "cd ${CMAKE_CURRENT_SOURCE_DIR}; git submodule update --init --recursive; git submodule foreach -q --recursive 'git checkout ${GIT_TAG_OR_BRANCH}'; git submodule foreach -q --recursive 'git pull'")
+    execute_process(COMMAND bash -c "mkdir -p ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software/libvisiontransfer")
 
     # Check for SSE4.1
     include(CheckCXXCompilerFlag)
@@ -105,33 +92,31 @@ if(BUILD_VT)
 
     # Build sources at runtime
     add_custom_target(nerian_stereo_visiontransfer_stub ALL
-        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software-${VT_VERSION}-src.tar.xz
-        COMMAND ${CMAKE_COMMAND} . -DCMAKE_CXX_FLAGS=${VT_CXX_FLAGS} -DDISABLE_NATIVE=1 -DDISABLE_PCL=1 -DDISABLE_OPENCV=1 -DDISABLE_PYTHON=1 -DDISABLE_OPEN3D=1
+        COMMAND ${CMAKE_COMMAND} ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software/libvisiontransfer -DCMAKE_CXX_FLAGS=${VT_CXX_FLAGS} -DDISABLE_NATIVE=1 -DDISABLE_PCL=1 -DDISABLE_OPENCV=1 -DDISABLE_PYTHON=1 -DDISABLE_OPEN3D=1
         COMMAND make
-        #COMMAND cp lib/libvisiontransfer.so ${CMAKE_CURRENT_BINARY_DIR}/lib/
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software/libvisiontransfer
     )
 
-    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer/lib/libvisiontransfer.so
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software/libvisiontransfer/lib/libvisiontransfer.so
         DESTINATION ${CMAKE_INSTALL_PREFIX}/lib
     )
 
-    install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer/visiontransfer
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software/libvisiontransfer/visiontransfer
         DESTINATION ${CMAKE_INSTALL_PREFIX}/include
         FILES_MATCHING PATTERN "*.h"
         PATTERN "CMakeFiles" EXCLUDE
     )
 
     include_directories(
-        ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer
-        ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/nvcom/helpers
+        ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software/libvisiontransfer
+        ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software/nvcom/helpers
     )
 
-    link_directories(${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer/lib)
-    set(VISION_TRANSFER_LINKDIR ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer/lib)
-    message(STATUS "Local libvisiontransfer link directory is: ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/libvisiontransfer/lib")
+    link_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software/libvisiontransfer/lib)
+    set(VISION_TRANSFER_LINKDIR ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software/libvisiontransfer/lib)
+    message(STATUS "Local libvisiontransfer link directory is: ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software/libvisiontransfer/lib")
 
-    set(COLORCODER_SOURCE_FILE ${CMAKE_CURRENT_BINARY_DIR}/nerian-vision-software-${VT_VERSION}-src/nvcom/helpers/colorcoder.cpp)
+    set(COLORCODER_SOURCE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/nerian-vision-software/nvcom/helpers/colorcoder.cpp)
 
 else()
     # Development settings: Use local libvisiontransfer
