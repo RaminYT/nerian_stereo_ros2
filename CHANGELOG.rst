@@ -2,6 +2,9 @@
 Changelog for package nerian_stereo
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.2.1 (2023-02-13)
+------------------
+* Create camera_info splitter node
 1.2.0 (2023-01-11)
 ------------------
 * Fixed parameter issue. Enabled NERIAN_ROS_DEBUG="params" for extra logging.
