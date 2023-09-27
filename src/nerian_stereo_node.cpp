@@ -718,68 +718,66 @@ void StereoNode::initPointCloud() {
 }
 
 void StereoNode::publishCameraInfo(rclcpp::Time stamp, const ImageSet& imageSet) {
-    if(camInfoMsg == NULL) {
+    // Once every second (or on first query)
+    double dt = (stamp.get_clock_type()!=lastCamInfoPublish.get_clock_type()) ? 99.9 : (stamp - lastCamInfoPublish).seconds();
+    if(dt > 1.0) {
         // Initialize the camera info structure
         camInfoMsg.reset(new nerian_stereo::msg::StereoCameraInfo);
 
         camInfoMsg->header.frame_id = internalFrame;
 
-        if(calibFile != "") {
-            std::vector<int> sizeVec;
-            calibStorage["size"] >> sizeVec;
-            if(sizeVec.size() != 2) {
-                std::runtime_error("Calibration file format error!");
-            }
+        auto param = deviceParameters->getParameterSet();
+        auto sizeVec = param["calib_image_size"].getTensorData();
+        auto m1 = param["calib_M_1"].getTensorData();
+        auto m2 = param["calib_M_2"].getTensorData();
+        auto d1 = param["calib_D_1"].getTensorData();
+        auto d2 = param["calib_D_2"].getTensorData();
+        auto r1 = param["calib_R_1"].getTensorData();
+        auto r2 = param["calib_R_2"].getTensorData();
+        auto p1 = param["calib_P_1"].getTensorData();
+        auto p2 = param["calib_P_2"].getTensorData();
 
-            camInfoMsg->left_info.header = camInfoMsg->header;
-            camInfoMsg->left_info.width = sizeVec[0];
-            camInfoMsg->left_info.height = sizeVec[1];
-            camInfoMsg->left_info.distortion_model = "plumb_bob";
-            calibStorage["D1"] >> camInfoMsg->left_info.d;
-            readCalibrationArray("M1", camInfoMsg->left_info.k);
-            readCalibrationArray("R1", camInfoMsg->left_info.r);
-            readCalibrationArray("P1", camInfoMsg->left_info.p);
-            camInfoMsg->left_info.binning_x = 1;
-            camInfoMsg->left_info.binning_y = 1;
-            camInfoMsg->left_info.roi.do_rectify = false;
-            camInfoMsg->left_info.roi.height = 0;
-            camInfoMsg->left_info.roi.width = 0;
-            camInfoMsg->left_info.roi.x_offset = 0;
-            camInfoMsg->left_info.roi.y_offset = 0;
+        auto q12 = param["calib_Q_12"].getTensorData();
+        auto t12 = param["calib_T_12"].getTensorData();
+        auto r12 = param["calib_R_12"].getTensorData();
 
-            camInfoMsg->right_info.header = camInfoMsg->header;
-            camInfoMsg->right_info.width = sizeVec[0];
-            camInfoMsg->right_info.height = sizeVec[1];
-            camInfoMsg->right_info.distortion_model = "plumb_bob";
-            calibStorage["D2"] >> camInfoMsg->right_info.d;
-            readCalibrationArray("M2", camInfoMsg->right_info.k);
-            readCalibrationArray("R2", camInfoMsg->right_info.r);
-            readCalibrationArray("P2", camInfoMsg->right_info.p);
-            camInfoMsg->right_info.binning_x = 1;
-            camInfoMsg->right_info.binning_y = 1;
-            camInfoMsg->right_info.roi.do_rectify = false;
-            camInfoMsg->right_info.roi.height = 0;
-            camInfoMsg->right_info.roi.width = 0;
-            camInfoMsg->right_info.roi.x_offset = 0;
-            camInfoMsg->right_info.roi.y_offset = 0;
+        camInfoMsg->left_info.header = camInfoMsg->header;
+        camInfoMsg->left_info.width = sizeVec[0];
+        camInfoMsg->left_info.height = sizeVec[1];
+        camInfoMsg->left_info.distortion_model = "plumb_bob";
+        camInfoMsg->left_info.d = d1;
+        std::copy(m1.begin(), m1.end(), camInfoMsg->left_info.k.begin());
+        std::copy(r1.begin(), r1.end(), camInfoMsg->left_info.r.begin());
+        std::copy(p1.begin(), p1.end(), camInfoMsg->left_info.p.begin());
+        camInfoMsg->left_info.binning_x = 1;
+        camInfoMsg->left_info.binning_y = 1;
+        camInfoMsg->left_info.roi.do_rectify = false;
+        camInfoMsg->left_info.roi.height = 0;
+        camInfoMsg->left_info.roi.width = 0;
+        camInfoMsg->left_info.roi.x_offset = 0;
+        camInfoMsg->left_info.roi.y_offset = 0;
 
-            readCalibrationArray("Q", camInfoMsg->q);
-            readCalibrationArray("T", camInfoMsg->t_left_right);
-            readCalibrationArray("R", camInfoMsg->r_left_right);
-        }
-    }
+        camInfoMsg->right_info.header = camInfoMsg->header;
+        camInfoMsg->right_info.width = sizeVec[0];
+        camInfoMsg->right_info.height = sizeVec[1];
+        camInfoMsg->right_info.distortion_model = "plumb_bob";
+        camInfoMsg->right_info.d = d2;
+        std::copy(m2.begin(), m2.end(), camInfoMsg->right_info.k.begin());
+        std::copy(r2.begin(), r2.end(), camInfoMsg->right_info.r.begin());
+        std::copy(p2.begin(), p2.end(), camInfoMsg->right_info.p.begin());
+        camInfoMsg->right_info.binning_x = 1;
+        camInfoMsg->right_info.binning_y = 1;
+        camInfoMsg->right_info.roi.do_rectify = false;
+        camInfoMsg->right_info.roi.height = 0;
+        camInfoMsg->right_info.roi.width = 0;
+        camInfoMsg->right_info.roi.x_offset = 0;
+        camInfoMsg->right_info.roi.y_offset = 0;
 
-    double dt = (stamp - lastCamInfoPublish).seconds();
-    if(dt > 1.0) {
-        // Rather use the Q-matrix that we received over the network if it is valid
-        const float* qMatrix = imageSet.getQMatrix();
-        if(qMatrix[0] != 0.0) {
-            for(int i=0; i<16; i++) {
-                camInfoMsg->q[i] = static_cast<double>(qMatrix[i]);
-            }
-        }
+        std::copy(q12.begin(), q12.end(), camInfoMsg->q.begin());
+        std::copy(t12.begin(), t12.end(), camInfoMsg->t_left_right.begin());
+        std::copy(r12.begin(), r12.end(), camInfoMsg->r_left_right.begin());
 
-        // Publish once per second
+        // Publish
         camInfoMsg->header.stamp = stamp;
         camInfoMsg->left_info.header.stamp = stamp;
         camInfoMsg->right_info.header.stamp = stamp;
