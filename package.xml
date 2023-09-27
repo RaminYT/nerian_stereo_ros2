@@ -3,10 +3,10 @@
 <package format="3">
   <name>nerian_stereo</name>
   <version>1.2.0</version>
-  <description>Driver node for ROS 2 for Scarlet, SceneScan and SP1 stereo vision sensors by Nerian Vision GmbH</description>
+  <description>Driver node for ROS 2 for Scarlet, SceneScan and Ruby stereo vision sensors by Allied Vision Technologies GmbH</description>
   <maintainer email="konstantin.schauwecker@nerian.com">Konstantin Schauwecker</maintainer>
   <license>MIT</license>
-  <author email="service@nerian.com">Nerian Vision Technologies</author>
+  <author email="service@nerian.com">Allied Vision Technologies</author>
   <url type="website">http://wiki.ros.org/nerian_stereo</url>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
