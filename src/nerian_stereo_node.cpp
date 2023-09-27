@@ -187,10 +187,8 @@ void StereoNode::init() {
     this->declare_parameter("use_tcp",                       false);
     this->declare_parameter("ros_coordinate_system",         true);
     this->declare_parameter("ros_timestamps",                true);
-    this->declare_parameter("calibration_file",              "");
     this->declare_parameter("delay_execution",               0.0);
     this->declare_parameter("max_depth",                     -1);
-    this->declare_parameter("q_from_calib_file",             false);
 
     onSetParametersCallback = this->add_on_set_parameters_callback(std::bind(&StereoNode::onSetParameters, this, std::placeholders::_1));
 
@@ -216,10 +214,8 @@ void StereoNode::init() {
     useTcp = this->get_parameter("use_tcp").as_bool();
     rosCoordinateSystem = this->get_parameter("ros_coordinate_system").as_bool();
     rosTimestamps  = this->get_parameter("ros_timestamps").as_bool();
-    calibFile = this->get_parameter("calibration_file").as_string();
     execDelay = this->get_parameter("delay_execution").as_double();
     maxDepth = this->get_parameter("max_depth").as_int();
-    useQFromCalibFile = this->get_parameter("q_from_calib_file").as_bool();
 
     lastLogTime = this->get_clock()->now();
 
@@ -234,8 +230,6 @@ void StereoNode::init() {
     leftImagePublisher = this->create_publisher<sensor_msgs::msg::Image>("/nerian_stereo/left_image", 5);
     rightImagePublisher = this->create_publisher<sensor_msgs::msg::Image>("/nerian_stereo/right_image", 5);
     thirdImagePublisher = this->create_publisher<sensor_msgs::msg::Image>("/nerian_stereo/color_image", 5);
-
-    loadCameraCalibration();
 
     cameraInfoPublisher = this->create_publisher<nerian_stereo::msg::StereoCameraInfo>("/nerian_stereo/stereo_camera_info", 1);
     cloudPublisher = this->create_publisher<sensor_msgs::msg::PointCloud2>("/nerian_stereo/point_cloud", 5);
@@ -353,25 +347,6 @@ void StereoNode::processOneImageSet() {
     }
 }
 
-void StereoNode::loadCameraCalibration() {
-    if(calibFile == "" ) {
-        RCLCPP_WARN(this->get_logger(), "No camera calibration file configured. Cannot publish detailed camera information!");
-    } else {
-        bool success = false;
-        try {
-            if (calibStorage.open(calibFile, cv::FileStorage::READ)) {
-                success = true;
-            }
-        } catch(...) {
-        }
-
-        if(!success) {
-            RCLCPP_WARN(this->get_logger(), "Error reading calibration file: %s\n"
-                "Cannot publish detailed camera information!", calibFile.c_str());
-        }
-    }
-}
-
 void StereoNode::publishImageMsg(const ImageSet& imageSet, int imageIndex, rclcpp::Time stamp, bool allowColorCode,
         rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher) {
 
@@ -467,13 +442,6 @@ void StereoNode::publishPointCloudMsg(ImageSet& imageSet, rclcpp::Time stamp) {
     if ((!imageSet.hasImageType(ImageSet::IMAGE_DISPARITY))
         || (imageSet.getPixelFormat(ImageSet::IMAGE_DISPARITY) != ImageSet::FORMAT_12_BIT_MONO)) {
         return; // This is not a disparity map
-    }
-
-    // Set static q matrix if desired
-    if(useQFromCalibFile) {
-        static std::vector<float> q;
-        calibStorage["Q"] >> q;
-        imageSet.setQMatrix(&q[0]);
     }
 
     // Transform Q-matrix if desired
@@ -787,17 +755,6 @@ void StereoNode::publishCameraInfo(rclcpp::Time stamp, const ImageSet& imageSet)
     }
 }
 
-template<class T> void StereoNode::readCalibrationArray(const char* key, T& dest) {
-    std::vector<double> doubleVec;
-    calibStorage[key] >> doubleVec;
-
-    if(doubleVec.size() != dest.size()) {
-        std::runtime_error("Calibration file format error!");
-    }
-
-    std::copy(doubleVec.begin(), doubleVec.end(), dest.begin());
-}
-
 void StereoNode::processDataChannels() {
     auto now = this->get_clock()->now();
     if ((now - currentTransform.header.stamp).seconds() < 0.01) {
@@ -837,7 +794,6 @@ void StereoNode::processDataChannels() {
         DEBUG_t += 0.1;
         tf2::Quaternion q;
         q.setRPY(0, 0, 0.3*sin(DEBUG_t));
-        currentTransform.header.stamp = this->get_clock()->now();
         currentTransform.transform.rotation.x = q.x();
         currentTransform.transform.rotation.y = q.y();
         currentTransform.transform.rotation.z = q.z();

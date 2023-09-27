@@ -148,9 +148,7 @@ private:
         "use_tcp",
         "ros_coordinate_system",
         "ros_timestamps",
-        "calibration_file",
         "delay_execution",
-        "q_from_calib_file",
     };
 
     // Handler for external parameter change attempts
@@ -166,10 +164,8 @@ private:
     std::string frame; // outer frame (e.g. world)
     std::string internalFrame; // our private frame / Transform we publish
     std::string remoteHost;
-    std::string calibFile;
     double execDelay;
     double maxDepth;
-    bool useQFromCalibFile;
     PointCloudColorMode pointCloudColorMode;
 
     // Other members
@@ -198,11 +194,6 @@ private:
 
     // Extra debug messages
     bool debugMessagesParameters;
-
-    /**
-     * \brief Loads a camera calibration file if configured
-     */
-    void loadCameraCalibration();
 
     /**
      * \brief Publishes the disparity map as 16-bit grayscale image or color coded
@@ -244,11 +235,6 @@ private:
      * \brief Publishes the camera info once per second
      */
     void publishCameraInfo(rclcpp::Time stamp, const ImageSet& imageSet);
-
-    /**
-     * \brief Reads a vector from the calibration file
-     */
-    template<class T> void readCalibrationArray(const char* key, T& dest);
 
     /**
      * \brief Timer callback that polls the image and data channel receivers

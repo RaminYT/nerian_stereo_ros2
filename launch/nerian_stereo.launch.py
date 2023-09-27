@@ -21,8 +21,6 @@ def generate_launch_description():
                     {'color_code_disparity_map',      ''},
                     {'color_code_legend':             False},
 
-                    {'calibration_file':              ''},
-                    {'q_from_calib_file':             False},
                     {'delay_execution':               0.0},
  
                 ]
