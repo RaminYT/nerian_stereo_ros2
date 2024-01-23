@@ -2,6 +2,13 @@
 Changelog for package nerian_stereo
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+1.2.1 (2024-01-23)
+------------------
+* Updated vision transfer to version 10.6.0
+* Migration to git submodule in lieu of src release archive
+* Support for setting ROS-overridden device parameters after connection
+* Contributors: Konstantin Schauwecker, Ramin Yaghoubzadeh Torky
+
 1.2.0 (2023-01-11)
 ------------------
 * Fixed parameter issue. Enabled NERIAN_ROS_DEBUG="params" for extra logging.
