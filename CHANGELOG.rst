@@ -2,8 +2,8 @@
 Changelog for package nerian_stereo
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+1.2.1 (2024-01-23)
+------------------
 * Updated vision transfer to version 10.6.0
 * Migration to git submodule in lieu of src release archive
 * Support for setting ROS-overridden device parameters after connection
